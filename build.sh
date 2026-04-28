@@ -164,14 +164,10 @@ check_disk_space() {
     log_info "Checking available disk space..."
     
     local available_gb
-    available_gb=$(df "$BASE_DIR" | tail -1 | awk '{printf "%.1f", $4 / 1024 / 1024}')
+    available_gb=$(df "$BASE_DIR" | tail -1 | awk '{printf "%d", $4 / 1024 / 1024}')
     
-    if (( $(echo "$available_gb < 10" | bc -l) )); then
-        log_warn "Low disk space: ${available_gb}GB available (need ~10GB)"
-        read -p "Continue anyway? (yes/no): " -r response
-        if [ "$response" != "yes" ]; then
-            exit 1
-        fi
+    if [ "$available_gb" -lt 10 ]; then
+        log_warn "Low disk space: ${available_gb}GB available (need ~10GB). Continuing anyway..."
     fi
     
     log_success "Disk space OK (${available_gb}GB available)"

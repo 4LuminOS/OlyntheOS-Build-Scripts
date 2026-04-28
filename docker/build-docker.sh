@@ -142,13 +142,13 @@ fi
 cp "${AI_BUILD_DIR}/ollama" "${CHROOT_DIR}/usr/local/bin/"
 
 echo "--> Running Scripts..."
-cp "${BASE_DIR}/02-configure-system.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/03-install-desktop.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/04-customize-desktop.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/05-install-ai.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/07-install-plymouth-theme.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/08-install-software.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/06-final-cleanup.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/02-configure-system.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/03-install-desktop.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/04-customize-desktop.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/05-install-ai.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/07-install-plymouth-theme.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/08-install-software.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/06-final-cleanup.sh" "${CHROOT_DIR}/tmp/"
 chmod +x "${CHROOT_DIR}/tmp/"*.sh
 
 chroot "${CHROOT_DIR}" /tmp/02-configure-system.sh
