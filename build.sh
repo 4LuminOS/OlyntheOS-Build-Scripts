@@ -199,6 +199,7 @@ phase_setup() {
         log_info "Removing previous build artifacts..."
         rm -rf "${WORK_DIR}"
         rm -f "${BASE_DIR}/${ISO_NAME}"
+        mkdir -p "${LOGS_DIR}"
     fi
     
     # Create directory structure
