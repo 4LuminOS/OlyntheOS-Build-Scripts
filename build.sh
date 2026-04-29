@@ -301,9 +301,9 @@ phase_ai() {
         sha256file=$(mktemp)
         if curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/sha256sum.txt" \
                 -o "$sha256file" 2>/dev/null; then
-            if grep -q "ollama-linux-amd64" "$sha256file"; then
+            if grep -q "[[:space:]]ollama-linux-amd64$" "$sha256file"; then
                 local expected_hash actual_hash
-                expected_hash=$(grep "ollama-linux-amd64" "$sha256file" | awk '{print $1}')
+                expected_hash=$(grep "[[:space:]]ollama-linux-amd64$" "$sha256file" | awk '{print $1}')
                 actual_hash=$(sha256sum "$OLLAMA_BINARY" | awk '{print $1}')
                 if [ "$expected_hash" != "$actual_hash" ]; then
                     log_error "Ollama binary checksum mismatch! Expected: $expected_hash  Got: $actual_hash"

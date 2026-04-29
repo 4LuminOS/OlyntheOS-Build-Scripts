@@ -58,8 +58,8 @@ apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64
         echo "--> Verifying Ollama binary checksum..."
         SHA256FILE=$(mktemp)
         if curl -fsSL "https://github.com/ollama/ollama/releases/download/v0.1.32/sha256sum.txt" -o "$SHA256FILE" 2>/dev/null; then
-            if grep -q "ollama-linux-amd64" "$SHA256FILE"; then
-                EXPECTED_HASH=$(grep "ollama-linux-amd64" "$SHA256FILE" | awk '{print $1}')
+            if grep -q "[[:space:]]ollama-linux-amd64$" "$SHA256FILE"; then
+                EXPECTED_HASH=$(grep "[[:space:]]ollama-linux-amd64$" "$SHA256FILE" | awk '{print $1}')
                 ACTUAL_HASH=$(sha256sum "${AI_BUILD_DIR}/ollama" | awk '{print $1}')
                 if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
                     echo "ERROR: Ollama binary checksum mismatch! Expected: $EXPECTED_HASH  Got: $ACTUAL_HASH"
@@ -121,8 +121,8 @@ if [ ! -f "${AI_BUILD_DIR}/ollama" ]; then
     echo "--> Verifying Ollama binary checksum..."
     SHA256FILE=$(mktemp)
     if curl -fsSL "https://github.com/ollama/ollama/releases/download/v0.1.32/sha256sum.txt" -o "$SHA256FILE" 2>/dev/null; then
-        if grep -q "ollama-linux-amd64" "$SHA256FILE"; then
-            EXPECTED_HASH=$(grep "ollama-linux-amd64" "$SHA256FILE" | awk '{print $1}')
+        if grep -q "[[:space:]]ollama-linux-amd64$" "$SHA256FILE"; then
+            EXPECTED_HASH=$(grep "[[:space:]]ollama-linux-amd64$" "$SHA256FILE" | awk '{print $1}')
             ACTUAL_HASH=$(sha256sum "${AI_BUILD_DIR}/ollama" | awk '{print $1}')
             if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
                 echo "ERROR: Ollama binary checksum mismatch! Expected: $EXPECTED_HASH  Got: $ACTUAL_HASH"
