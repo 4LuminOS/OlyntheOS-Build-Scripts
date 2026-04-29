@@ -395,10 +395,6 @@ GRUBCFG
     local iso_size
     iso_size=$(du -h "${BASE_DIR}/${ISO_NAME}" | cut -f1)
     log_success "ISO built successfully: $iso_size"
-    
-    # Cleanup work directory
-    log_info "Cleaning up build artifacts..."
-    rm -rf "${WORK_DIR}"
 }
 
 ################################################################################
@@ -531,6 +527,10 @@ main() {
     
     # Execute pipeline
     execute_pipeline
+    
+    # Cleanup work directory after all logging is complete
+    log_info "Cleaning up build artifacts..."
+    rm -rf "${WORK_DIR}"
 }
 
 main "$@"
