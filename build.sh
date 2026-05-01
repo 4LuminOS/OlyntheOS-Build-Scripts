@@ -98,10 +98,14 @@ debug() {
 
 _emergency_cleanup() {
     local exit_code=$?
+
+    # Use plain echo here — NOT log_info/log_warn — because this trap can fire
+    # after WORK_DIR has been deleted, at which point the log file no longer
+    # exists and tee would error out and set exit code 1.
     if [ $exit_code -ne 0 ]; then
-        log_warn "Script exited with code $exit_code — running emergency mount cleanup..."
+        echo "[TRAP] Script exited with code $exit_code — running emergency mount cleanup..." >&2
     else
-        log_info "Running exit cleanup..."
+        echo "[TRAP] Running exit cleanup..." >&2
     fi
 
     # Unmount in strict reverse order: tmpfs first, then bind mounts
@@ -117,8 +121,8 @@ _emergency_cleanup() {
     for mp in "${mount_points[@]}"; do
         local full_path="${CHROOT_DIR}/${mp}"
         if mountpoint -q "$full_path" 2>/dev/null; then
-            log_info "Emergency umount: $mp"
-            umount "$full_path" 2>/dev/null || log_warn "Could not unmount $full_path"
+            echo "[TRAP] Unmounting: $mp" >&2
+            umount "$full_path" 2>/dev/null || echo "[TRAP] Could not unmount $full_path" >&2
         fi
     done
 }
@@ -631,10 +635,24 @@ main() {
 
     # Execute pipeline
     execute_pipeline
-    
-    # Cleanup work directory after all logging is complete
-    log_info "Cleaning up build artifacts..."
+
+    # Copy the build log out of WORK_DIR before we delete it,
+    # so the GitHub Actions artifact upload (or any CI tool) can find it.
+    local final_log="${BASE_DIR}/build.log"
+    cp "${LOGS_DIR}/build.log" "$final_log" 2>/dev/null || true
+
+    # Close the tee redirect so the log file handle is released,
+    # then disable the trap before the intentional rm -rf so the
+    # trap's echo calls don't fire into a deleted directory.
+    exec 1>/dev/null 2>&1
+    trap - EXIT
+
+    # Now safe to delete WORK_DIR — no open log handles, no trap firing
+    echo "[INFO] Cleaning up build artifacts..." >&2
     rm -rf "${WORK_DIR}"
+
+    echo "[✓] Done. ISO: ${BASE_DIR}/${ISO_NAME}" >&2
+    echo "[INFO] Build log saved to: ${final_log}" >&2
 }
 
 main "$@"
