@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# LuminOS Modular Build Pipeline (v8.3)
+# LuminOS Modular Build Pipeline (v8.4)
 # 
 # Clean, modular ISO build system with independent phases
 # Each phase can be run separately, skipped, or debugged independently
@@ -12,6 +12,13 @@
 #   ./build.sh --debug            # Verbose output
 #   ./build.sh --list-phases      # Show available phases
 #
+# Fixes (v8.4):
+#   - Added tmpfs mounts for /tmp and /var/cache/apt/archives in phase_packages
+#   - Added emergency trap cleanup so mounts are released on crash/exit
+#   - Fixed phase_setup to also unmount tmpfs mounts from previous runs
+#   - Fixed phase_cleanup to unmount tmpfs before other mounts (reverse order)
+#   - Bumped version to 8.4
+#
 ################################################################################
 
 set -euo pipefail
@@ -20,7 +27,7 @@ set -euo pipefail
 # Configuration
 ################################################################################
 
-readonly VERSION="8.3"
+readonly VERSION="8.4"
 readonly BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly WORK_DIR="${BASE_DIR}/work"
 readonly CHROOT_DIR="${WORK_DIR}/chroot"
@@ -29,6 +36,11 @@ readonly LOGS_DIR="${WORK_DIR}/logs"
 readonly ISO_NAME="LuminOS-0.2.1-amd64.iso"
 readonly OLLAMA_VERSION="v0.1.32"
 readonly OLLAMA_BINARY="${BASE_DIR}/ollama-linux-amd64"
+
+# tmpfs sizes — adjust based on your VM's available RAM
+# Use: free -h   to check available RAM before building
+readonly TMPFS_TMP_SIZE="6G"           # for /tmp  (build scripts, dpkg staging)
+readonly TMPFS_APT_SIZE="4G"           # for /var/cache/apt/archives (.deb files)
 
 # Build options
 DEBUG=false
@@ -77,6 +89,42 @@ debug() {
         echo -e "${YELLOW}[DEBUG]${NC} $*" | tee -a "${LOGS_DIR}/debug.log"
     fi
 }
+
+################################################################################
+# Emergency Cleanup Trap
+# Runs automatically on script exit (normal or crash) to ensure
+# no mounts are left dangling on the host system.
+################################################################################
+
+_emergency_cleanup() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_warn "Script exited with code $exit_code — running emergency mount cleanup..."
+    else
+        log_info "Running exit cleanup..."
+    fi
+
+    # Unmount in strict reverse order: tmpfs first, then bind mounts
+    local mount_points=(
+        "var/cache/apt/archives"
+        "tmp"
+        "sys"
+        "proc"
+        "dev/pts"
+        "dev"
+    )
+
+    for mp in "${mount_points[@]}"; do
+        local full_path="${CHROOT_DIR}/${mp}"
+        if mountpoint -q "$full_path" 2>/dev/null; then
+            log_info "Emergency umount: $mp"
+            umount "$full_path" 2>/dev/null || log_warn "Could not unmount $full_path"
+        fi
+    done
+}
+
+# Register trap — runs on any exit, including errors and Ctrl+C
+trap _emergency_cleanup EXIT
 
 ################################################################################
 # Phase Management
@@ -173,6 +221,23 @@ check_disk_space() {
     log_success "Disk space OK (${available_gb}GB available)"
 }
 
+check_ram_for_tmpfs() {
+    log_info "Checking available RAM for tmpfs..."
+
+    local avail_ram_gb
+    avail_ram_gb=$(free -g | awk '/^Mem:/{print $7}')
+
+    local required_gb=10  # TMPFS_TMP_SIZE(6) + TMPFS_APT_SIZE(4)
+
+    if [ "$avail_ram_gb" -lt "$required_gb" ]; then
+        log_warn "Low RAM: ${avail_ram_gb}GB available, tmpfs needs ~${required_gb}GB."
+        log_warn "Consider reducing TMPFS_TMP_SIZE and TMPFS_APT_SIZE at the top of this script."
+        log_warn "Continuing anyway — kernel will use swap if needed."
+    else
+        log_success "RAM OK (${avail_ram_gb}GB available for tmpfs)"
+    fi
+}
+
 ################################################################################
 # Phase: Setup
 ################################################################################
@@ -182,12 +247,21 @@ phase_setup() {
     
     log_info "Cleaning previous build..."
     
-    # Unmount previous chroot
-    for mount_point in sys proc dev/pts dev; do
+    # Unmount any leftover mounts from a previous run
+    # Include tmpfs mounts that v8.3 didn't clean up
+    local prev_mounts=(
+        "var/cache/apt/archives"
+        "tmp"
+        "sys"
+        "proc"
+        "dev/pts"
+        "dev"
+    )
+    for mount_point in "${prev_mounts[@]}"; do
         local full_path="${CHROOT_DIR}/${mount_point}"
         if mountpoint -q "$full_path" 2>/dev/null; then
-            log_info "Unmounting $mount_point..."
-            sudo umount "$full_path" || log_warn "Failed to unmount $mount_point"
+            log_info "Unmounting leftover: $mount_point"
+            umount "$full_path" || log_warn "Failed to unmount $mount_point"
         fi
     done
     
@@ -204,7 +278,11 @@ phase_setup() {
     
     # Create directory structure
     log_info "Creating directory structure..."
-    mkdir -p "${CHROOT_DIR}" "${ISO_DIR}/live" "${ISO_DIR}/boot/grub" "${LOGS_DIR}"
+    mkdir -p \
+        "${CHROOT_DIR}" \
+        "${ISO_DIR}/live" \
+        "${ISO_DIR}/boot/grub" \
+        "${LOGS_DIR}"
     
     log_success "Setup complete"
 }
@@ -235,16 +313,28 @@ phase_configure() {
 
 ################################################################################
 # Phase: Install Packages
+#
+# FIX: Added tmpfs mounts for /tmp and /var/cache/apt/archives BEFORE entering
+# the chroot. Without these, apt/dpkg writes directly to the host disk with no
+# size limit, causing "No space left on device" when the VM disk fills up.
 ################################################################################
 
 phase_packages() {
     log_header "PHASE 3: Install System Packages"
     
     log_info "Mounting system filesystems..."
-    mount --bind /dev "${CHROOT_DIR}/dev"
-    mount --bind /dev/pts "${CHROOT_DIR}/dev/pts"
-    mount -t proc /proc "${CHROOT_DIR}/proc"
-    mount -t sysfs /sys "${CHROOT_DIR}/sys"
+    mount --bind /dev        "${CHROOT_DIR}/dev"
+    mount --bind /dev/pts    "${CHROOT_DIR}/dev/pts"
+    mount -t proc  /proc     "${CHROOT_DIR}/proc"
+    mount -t sysfs /sys      "${CHROOT_DIR}/sys"
+
+    # Mount tmpfs BEFORE entering the chroot.
+    # This caps how much host disk space dpkg and apt can consume.
+    # /tmp      — dpkg uses this for staging during package installs
+    # /var/cache/apt/archives — where apt downloads .deb files
+    log_info "Mounting tmpfs (tmp: ${TMPFS_TMP_SIZE}, apt cache: ${TMPFS_APT_SIZE})..."
+    mount -t tmpfs -o size="${TMPFS_TMP_SIZE}",mode=1777 tmpfs "${CHROOT_DIR}/tmp"
+    mount -t tmpfs -o size="${TMPFS_APT_SIZE}"           tmpfs "${CHROOT_DIR}/var/cache/apt/archives"
     
     log_info "Running system configuration script..."
     cp "${BASE_DIR}/phases/02-configure-system.sh" "${CHROOT_DIR}/tmp/"
@@ -262,10 +352,10 @@ phase_desktop() {
     log_header "PHASE 4: Install Desktop Environment"
     
     log_info "Running desktop installation script..."
-    cp "${BASE_DIR}/phases/03-install-desktop.sh" "${CHROOT_DIR}/tmp/"
-    cp "${BASE_DIR}/phases/04-customize-desktop.sh" "${CHROOT_DIR}/tmp/"
+    cp "${BASE_DIR}/phases/03-install-desktop.sh"       "${CHROOT_DIR}/tmp/"
+    cp "${BASE_DIR}/phases/04-customize-desktop.sh"     "${CHROOT_DIR}/tmp/"
     cp "${BASE_DIR}/phases/07-install-plymouth-theme.sh" "${CHROOT_DIR}/tmp/"
-    cp "${BASE_DIR}/phases/08-install-software.sh" "${CHROOT_DIR}/tmp/"
+    cp "${BASE_DIR}/phases/08-install-software.sh"      "${CHROOT_DIR}/tmp/"
     
     log_info "Copying assets for Plymouth theme..."
     mkdir -p "${CHROOT_DIR}/usr/share/wallpapers/luminos"
@@ -273,10 +363,10 @@ phase_desktop() {
     
     chmod +x "${CHROOT_DIR}/tmp/"{03,04,07,08}*.sh
     
-    chroot "${CHROOT_DIR}" /tmp/03-install-desktop.sh 2>&1 | tee -a "${LOGS_DIR}/03-desktop.log"
-    chroot "${CHROOT_DIR}" /tmp/04-customize-desktop.sh 2>&1 | tee -a "${LOGS_DIR}/04-customize.log"
+    chroot "${CHROOT_DIR}" /tmp/03-install-desktop.sh      2>&1 | tee -a "${LOGS_DIR}/03-desktop.log"
+    chroot "${CHROOT_DIR}" /tmp/04-customize-desktop.sh    2>&1 | tee -a "${LOGS_DIR}/04-customize.log"
     chroot "${CHROOT_DIR}" /tmp/07-install-plymouth-theme.sh 2>&1 | tee -a "${LOGS_DIR}/07-plymouth.log"
-    chroot "${CHROOT_DIR}" /tmp/08-install-software.sh 2>&1 | tee -a "${LOGS_DIR}/08-software.log"
+    chroot "${CHROOT_DIR}" /tmp/08-install-software.sh     2>&1 | tee -a "${LOGS_DIR}/08-software.log"
     
     log_success "Desktop environment installed"
 }
@@ -329,11 +419,11 @@ phase_ai() {
     cp "$OLLAMA_BINARY" "${CHROOT_DIR}/usr/local/bin/ollama"
     
     log_info "Running AI setup script..."
-    cp "${BASE_DIR}/phases/05-install-ai.sh" "${CHROOT_DIR}/tmp/"
-    cp "${BASE_DIR}/utilities/distro-cleanup.sh" "${CHROOT_DIR}/usr/local/bin/"
-    cp "${BASE_DIR}/utilities/luminos-firstboot-ai.sh" "${CHROOT_DIR}/usr/local/bin/"
-    cp "${BASE_DIR}/services/luminos-firstboot-ai.service" "${CHROOT_DIR}/etc/systemd/system/"
-    cp "${BASE_DIR}/utilities/detect-model-recommendation.sh" "${CHROOT_DIR}/usr/local/bin/"
+    cp "${BASE_DIR}/phases/05-install-ai.sh"                         "${CHROOT_DIR}/tmp/"
+    cp "${BASE_DIR}/utilities/distro-cleanup.sh"                     "${CHROOT_DIR}/usr/local/bin/"
+    cp "${BASE_DIR}/utilities/luminos-firstboot-ai.sh"               "${CHROOT_DIR}/usr/local/bin/"
+    cp "${BASE_DIR}/services/luminos-firstboot-ai.service"           "${CHROOT_DIR}/etc/systemd/system/"
+    cp "${BASE_DIR}/utilities/detect-model-recommendation.sh"        "${CHROOT_DIR}/usr/local/bin/"
     
     chmod +x "${CHROOT_DIR}/tmp/05-install-ai.sh"
     chmod +x "${CHROOT_DIR}/usr/local/bin/"{distro-cleanup,luminos-firstboot-ai,detect-model-recommendation}.sh
@@ -345,6 +435,9 @@ phase_ai() {
 
 ################################################################################
 # Phase: Cleanup
+#
+# FIX: Unmount tmpfs mounts FIRST (reverse of mount order in phase_packages),
+# then unmount bind mounts. Wrong order causes "target is busy" errors.
 ################################################################################
 
 phase_cleanup() {
@@ -355,7 +448,17 @@ phase_cleanup() {
     chmod +x "${CHROOT_DIR}/tmp/06-final-cleanup.sh"
     chroot "${CHROOT_DIR}" /tmp/06-final-cleanup.sh 2>&1 | tee -a "${LOGS_DIR}/06-cleanup.log"
     
-    log_info "Unmounting system filesystems..."
+    log_info "Unmounting filesystems (reverse mount order)..."
+
+    # Step 1: tmpfs mounts first (mounted last in phase_packages)
+    if mountpoint -q "${CHROOT_DIR}/var/cache/apt/archives" 2>/dev/null; then
+        umount "${CHROOT_DIR}/var/cache/apt/archives" || log_warn "Failed to umount apt cache"
+    fi
+    if mountpoint -q "${CHROOT_DIR}/tmp" 2>/dev/null; then
+        umount "${CHROOT_DIR}/tmp" || log_warn "Failed to umount tmp"
+    fi
+
+    # Step 2: then bind mounts in reverse order
     umount "${CHROOT_DIR}/sys"
     umount "${CHROOT_DIR}/proc"
     umount "${CHROOT_DIR}/dev/pts"
@@ -376,7 +479,7 @@ phase_iso() {
         -e boot -comp zstd -processors "$(nproc)" 2>&1 | tee -a "${LOGS_DIR}/iso-squashfs.log"
     
     log_info "Copying kernel and initrd..."
-    cp "${CHROOT_DIR}/boot"/vmlinuz* "${ISO_DIR}/live/vmlinuz"
+    cp "${CHROOT_DIR}/boot"/vmlinuz*   "${ISO_DIR}/live/vmlinuz"
     cp "${CHROOT_DIR}/boot"/initrd.img* "${ISO_DIR}/live/initrd.img"
     
     log_info "Configuring GRUB bootloader..."
@@ -453,10 +556,10 @@ ${BLUE}Options:${NC}
   --help                 Show this help message
 
 ${BLUE}Examples:${NC}
-  $(basename "$0")                      # Full build
-  $(basename "$0") --phase desktop      # Only build desktop phase
+  $(basename "$0")                          # Full build
+  $(basename "$0") --phase desktop          # Only build desktop phase
   $(basename "$0") --skip-ai --skip-cleanup
-  $(basename "$0") --debug              # Verbose output
+  $(basename "$0") --debug                  # Verbose output
   $(basename "$0") --incremental --phase iso  # Continue and build ISO
 
 ${BLUE}Phases:${NC}
@@ -481,11 +584,11 @@ execute_pipeline() {
             
             case "$phase" in
                 configure) phase_configure ;;
-                packages) phase_packages ;;
-                desktop) phase_desktop ;;
-                ai) phase_ai ;;
-                cleanup) phase_cleanup ;;
-                iso) phase_iso ;;
+                packages)  phase_packages  ;;
+                desktop)   phase_desktop   ;;
+                ai)        phase_ai        ;;
+                cleanup)   phase_cleanup   ;;
+                iso)       phase_iso       ;;
             esac
             
             phases_run=$((phases_run + 1))
@@ -520,11 +623,12 @@ main() {
     
     check_root
     parse_arguments "$@"
-    
+
     # Always do setup first
     phase_setup
     check_disk_space
-    
+    check_ram_for_tmpfs
+
     # Execute pipeline
     execute_pipeline
     
