@@ -31,7 +31,7 @@ func FileSystemSetup() {
 			os.Exit(0)
 		}
 	}
-	err = os.Mkdir(BaseDirectory, 0777)
+	err = os.Mkdir(BaseDirectory, 0750)
 	if err != nil {
 		log.Fatalf("Failed to created base directory: %v", err)
 	}
@@ -41,16 +41,16 @@ func FileSystemSetup() {
 	isoDirectory := filepath.Join(BaseDirectory, "iso")
 	aiBuildDirectory := filepath.Join(BaseDirectory, "ai_build")
 
-	if err := os.Mkdir(workDirectory, 0777); err != nil {
+	if err := os.Mkdir(workDirectory, 0750); err != nil {
 		log.Fatalf("Failed creating work directory: %v", err)
 	}
-	if err := os.Mkdir(chrootDirectory, 0777); err != nil {
+	if err := os.Mkdir(chrootDirectory, 0750); err != nil {
 		log.Fatalf("Failed creating chroot directory: %v", err)
 	}
-	if err := os.Mkdir(isoDirectory, 0777); err != nil {
+	if err := os.Mkdir(isoDirectory, 0750); err != nil {
 		log.Fatalf("Failed creating ISO directory: %v", err)
 	}
-	if err := os.Mkdir(aiBuildDirectory, 0777); err != nil {
+	if err := os.Mkdir(aiBuildDirectory, 0750); err != nil {
 		log.Fatalf("Failed creating AI build directory: %v", err)
 	}
 }

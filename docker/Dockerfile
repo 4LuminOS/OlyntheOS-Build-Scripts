@@ -29,7 +29,7 @@ WORKDIR /workspace
 COPY . /workspace
 
 # Ensure build script is executable
-RUN chmod +x /workspace/build-docker.sh
+RUN chmod +x /workspace/docker/build-docker.sh
 
 # Run build and copy produced ISO(s) to /out (bind mount from host)
-ENTRYPOINT ["/bin/bash", "-lc", "set -e; /workspace/build-docker.sh; mkdir -p /out; find /workspace -type f -name '*.iso' -exec cp -v {} /out/ \\;; echo 'Done. ISO(s) copied to /out'"]
+ENTRYPOINT ["/bin/bash", "-lc", "set -e; /workspace/docker/build-docker.sh; mkdir -p /out; find /workspace -type f -name '*.iso' -exec cp -v {} /out/ \\;; echo 'Done. ISO(s) copied to /out'"]

@@ -17,5 +17,8 @@ update-locale LANG="en_US.UTF-8"
 echo "--> Creating live user 'liveuser'..."
 useradd -m -s /bin/bash -G sudo,audio,video,netdev,plugdev liveuser
 echo "--> Setting default passwords to 'luminos'..."
+# SECURITY NOTE: These are intentional live-ISO defaults for demo use only.
+# Both accounts use the published default password 'luminos'.
+# Any production or persistent installation MUST change these passwords immediately.
 echo "root:luminos" | chpasswd
 echo "liveuser:luminos" | chpasswd

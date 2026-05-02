@@ -26,7 +26,8 @@ mkdir -p /opt/zen-browser
 ZEN_API_URL="https://api.github.com/repos/zen-browser/desktop/releases/latest"
 ZEN_DOWNLOAD_URL=$(curl -s "$ZEN_API_URL" | jq -r '.assets[] | select(.name | contains("linux-x86_64.tar.bz2")) | .browser_download_url' | head -n 1)
 
-if [ -n "$ZEN_DOWNLOAD_URL" ] && [ "$ZEN_DOWNLOAD_URL" != "null" ]; then
+if [ -n "$ZEN_DOWNLOAD_URL" ] && [ "$ZEN_DOWNLOAD_URL" != "null" ] && \
+   [[ "$ZEN_DOWNLOAD_URL" =~ ^https://github\.com/zen-browser/desktop/releases/ ]]; then
     echo "--> Downloading Zen from: $ZEN_DOWNLOAD_URL"
     wget -O /tmp/zen.tar.bz2 "$ZEN_DOWNLOAD_URL"
     

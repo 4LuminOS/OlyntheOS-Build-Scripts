@@ -54,6 +54,27 @@ apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64
     if [ "$MODEL_FOUND" = false ]; then
         echo "--> Downloading models..."
         curl -fL "https://github.com/ollama/ollama/releases/download/v0.1.32/ollama-linux-amd64" -o "${AI_BUILD_DIR}/ollama"
+        
+        echo "--> Verifying Ollama binary checksum..."
+        SHA256FILE=$(mktemp)
+        if curl -fsSL "https://github.com/ollama/ollama/releases/download/v0.1.32/sha256sum.txt" -o "$SHA256FILE" 2>/dev/null; then
+            if grep -q "[[:space:]]ollama-linux-amd64$" "$SHA256FILE"; then
+                EXPECTED_HASH=$(grep "[[:space:]]ollama-linux-amd64$" "$SHA256FILE" | awk '{print $1}')
+                ACTUAL_HASH=$(sha256sum "${AI_BUILD_DIR}/ollama" | awk '{print $1}')
+                if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                    echo "ERROR: Ollama binary checksum mismatch! Expected: $EXPECTED_HASH  Got: $ACTUAL_HASH"
+                    rm -f "${AI_BUILD_DIR}/ollama" "$SHA256FILE"
+                    exit 1
+                fi
+                echo "--> Ollama checksum verified"
+            else
+                echo "WARNING: ollama-linux-amd64 entry not found in sha256sum.txt — skipping verification"
+            fi
+        else
+            echo "WARNING: Could not download sha256sum.txt — skipping checksum verification"
+        fi
+        rm -f "$SHA256FILE"
+        
         chmod +x "${AI_BUILD_DIR}/ollama"
         export HOME="${AI_BUILD_DIR}"
         "${AI_BUILD_DIR}/ollama" serve > "${AI_BUILD_DIR}/server.log" 2>&1 &
@@ -96,18 +117,38 @@ mkdir -p "${CHROOT_DIR}/usr/share/wallpapers/luminos"
 cp "${BASE_DIR}/assets/"* "${CHROOT_DIR}/usr/share/wallpapers/luminos/"
 if [ ! -f "${AI_BUILD_DIR}/ollama" ]; then
     curl -fL "https://github.com/ollama/ollama/releases/download/v0.1.32/ollama-linux-amd64" -o "${AI_BUILD_DIR}/ollama"
+    
+    echo "--> Verifying Ollama binary checksum..."
+    SHA256FILE=$(mktemp)
+    if curl -fsSL "https://github.com/ollama/ollama/releases/download/v0.1.32/sha256sum.txt" -o "$SHA256FILE" 2>/dev/null; then
+        if grep -q "[[:space:]]ollama-linux-amd64$" "$SHA256FILE"; then
+            EXPECTED_HASH=$(grep "[[:space:]]ollama-linux-amd64$" "$SHA256FILE" | awk '{print $1}')
+            ACTUAL_HASH=$(sha256sum "${AI_BUILD_DIR}/ollama" | awk '{print $1}')
+            if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                echo "ERROR: Ollama binary checksum mismatch! Expected: $EXPECTED_HASH  Got: $ACTUAL_HASH"
+                rm -f "${AI_BUILD_DIR}/ollama" "$SHA256FILE"
+                exit 1
+            fi
+            echo "--> Ollama checksum verified"
+        else
+            echo "WARNING: ollama-linux-amd64 entry not found in sha256sum.txt — skipping verification"
+        fi
+    else
+        echo "WARNING: Could not download sha256sum.txt — skipping checksum verification"
+    fi
+    rm -f "$SHA256FILE"
     chmod +x "${AI_BUILD_DIR}/ollama"
 fi
 cp "${AI_BUILD_DIR}/ollama" "${CHROOT_DIR}/usr/local/bin/"
 
 echo "--> Running Scripts..."
-cp "${BASE_DIR}/02-configure-system.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/03-install-desktop.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/04-customize-desktop.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/05-install-ai.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/07-install-plymouth-theme.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/08-install-software.sh" "${CHROOT_DIR}/tmp/"
-cp "${BASE_DIR}/06-final-cleanup.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/02-configure-system.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/03-install-desktop.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/04-customize-desktop.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/05-install-ai.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/07-install-plymouth-theme.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/08-install-software.sh" "${CHROOT_DIR}/tmp/"
+cp "${BASE_DIR}/phases/06-final-cleanup.sh" "${CHROOT_DIR}/tmp/"
 chmod +x "${CHROOT_DIR}/tmp/"*.sh
 
 chroot "${CHROOT_DIR}" /tmp/02-configure-system.sh
@@ -154,7 +195,7 @@ mkdir -p "$L3/usr/share/ollama/.ollama/models/blobs"
 mkdir -p "$L4/usr/share/ollama/.ollama/models/blobs"
 
 COUNT=0
-find "${TARGET_MODEL_DIR}/blobs" -type f -print0 | while IFS= read -r -d '' file; do
+while IFS= read -r -d '' file; do
     MOD=$((COUNT % 3))
     if [ $MOD -eq 0 ]; then
         cp "$file" "$L2/usr/share/ollama/.ollama/models/blobs/"
@@ -164,7 +205,7 @@ find "${TARGET_MODEL_DIR}/blobs" -type f -print0 | while IFS= read -r -d '' file
         cp "$file" "$L4/usr/share/ollama/.ollama/models/blobs/"
     fi
     COUNT=$((COUNT + 1))
-done
+done < <(find "${TARGET_MODEL_DIR}/blobs" -type f -print0)
 
 echo "   Layer 2..."
 mksquashfs "$L2" "${ISO_DIR}/live/02-ai-part1.squashfs" -comp zstd -processors "$(nproc)"
