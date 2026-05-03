@@ -25,8 +25,15 @@ mkdir -p "${CHROOT_DIR}" "${ISO_DIR}/live" "${ISO_DIR}/boot/grub" "${AI_BUILD_DI
 
 # --- 2. Install Dependencies ---
 echo "--> Installing dependencies..."
+. /etc/os-release || true
 apt-get update
-apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools curl rsync
+# On Debian hosts include grub packages; on other hosts (e.g. Ubuntu) skip them
+COMMON_DEPS=(debootstrap squashfs-tools xorriso mtools curl rsync)
+if [ "${ID}" = "debian" ]; then
+    apt-get install -y "${COMMON_DEPS[@]}" grub-pc-bin grub-efi-amd64-bin
+else
+    apt-get install -y "${COMMON_DEPS[@]}"
+fi
 
     # --- 3. PREPARE AI ---
     echo "--> Preparing AI..."
