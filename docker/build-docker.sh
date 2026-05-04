@@ -12,6 +12,15 @@ CHROOT_DIR="${WORK_DIR}/chroot"
 ISO_DIR="${WORK_DIR}/iso"
 AI_BUILD_DIR="${WORK_DIR}/ai_build"
 ISO_NAME="LuminOS-0.2.1-amd64.iso"
+TARGET_RUNTIME="chroot"
+
+run_in_target() {
+    if [ "$TARGET_RUNTIME" = "proot" ]; then
+        proot -0 -R "${CHROOT_DIR}" -b /dev -b /dev/pts -b /proc -b /sys "$@"
+    else
+        chroot "${CHROOT_DIR}" "$@"
+    fi
+}
 
 # Cleanup
 for mount_point in "${CHROOT_DIR}/sys" "${CHROOT_DIR}/proc" "${CHROOT_DIR}/dev/pts" "${CHROOT_DIR}/dev"; do
@@ -25,14 +34,16 @@ mkdir -p "${CHROOT_DIR}" "${ISO_DIR}/live" "${ISO_DIR}/boot/grub" "${AI_BUILD_DI
 
 # --- 2. Install Dependencies ---
 echo "--> Installing dependencies..."
-. /etc/os-release || true
 apt-get update
-# On Debian hosts include grub packages; on other hosts (e.g. Ubuntu) skip them
-COMMON_DEPS=(debootstrap squashfs-tools xorriso mtools curl rsync)
-if [ "${ID}" = "debian" ]; then
-    apt-get install -y "${COMMON_DEPS[@]}" grub-pc-bin grub-efi-amd64-bin
+apt-get install -y debootstrap squashfs-tools xorriso mtools curl rsync proot
+# Grub packages are optional (may not be available on all distros)
+apt-get install -y grub-pc-bin grub-efi-amd64-bin || true
+
+if chroot / /bin/true >/dev/null 2>&1; then
+    TARGET_RUNTIME="chroot"
 else
-    apt-get install -y "${COMMON_DEPS[@]}"
+    TARGET_RUNTIME="proot"
+    echo "--> chroot is not available here; using proot fallback for target execution..."
 fi
 
     # --- 3. PREPARE AI ---
@@ -106,7 +117,12 @@ done
 
 # --- 4. Bootstrap System ---
 echo "--> Bootstrapping Debian..."
-debootstrap --arch=amd64 --components=main,contrib,non-free-firmware --include=linux-image-amd64,live-boot,systemd-sysv trixie "${CHROOT_DIR}" http://ftp.debian.org/debian/
+if [ "$TARGET_RUNTIME" = "proot" ]; then
+    debootstrap --foreign --arch=amd64 --components=main,contrib,non-free-firmware --include=linux-image-amd64,live-boot,systemd-sysv trixie "${CHROOT_DIR}" http://ftp.debian.org/debian/
+    proot -0 -R "${CHROOT_DIR}" /debootstrap/debootstrap --second-stage
+else
+    debootstrap --arch=amd64 --components=main,contrib,non-free-firmware --include=linux-image-amd64,live-boot,systemd-sysv trixie "${CHROOT_DIR}" http://ftp.debian.org/debian/
+fi
 
 # --- 5. Customize ---
 mkdir -p "${CHROOT_DIR}/etc/apt/apt.conf.d"
@@ -158,13 +174,13 @@ cp "${BASE_DIR}/phases/08-install-software.sh" "${CHROOT_DIR}/tmp/"
 cp "${BASE_DIR}/phases/06-final-cleanup.sh" "${CHROOT_DIR}/tmp/"
 chmod +x "${CHROOT_DIR}/tmp/"*.sh
 
-chroot "${CHROOT_DIR}" /tmp/02-configure-system.sh
-chroot "${CHROOT_DIR}" /tmp/03-install-desktop.sh
-chroot "${CHROOT_DIR}" /tmp/04-customize-desktop.sh
-chroot "${CHROOT_DIR}" /tmp/05-install-ai.sh
-chroot "${CHROOT_DIR}" /tmp/07-install-plymouth-theme.sh
-chroot "${CHROOT_DIR}" /tmp/08-install-software.sh
-chroot "${CHROOT_DIR}" /tmp/06-final-cleanup.sh
+run_in_target /tmp/02-configure-system.sh
+run_in_target /tmp/03-install-desktop.sh
+run_in_target /tmp/04-customize-desktop.sh
+run_in_target /tmp/05-install-ai.sh
+run_in_target /tmp/07-install-plymouth-theme.sh
+run_in_target /tmp/08-install-software.sh
+run_in_target /tmp/06-final-cleanup.sh
 
 # Commented, because it fails and not actually needed inside docker
 # echo "--> Unmounting..."
