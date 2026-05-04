@@ -206,7 +206,8 @@ check_dependencies() {
         log_warn "Missing commands: ${missing[*]}"
         log_info "Installing missing dependencies..."
         apt-get update
-        apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools curl rsync
+        apt-get install -y debootstrap squashfs-tools xorriso mtools curl rsync
+        apt-get install -y grub-pc-bin grub-efi-amd64-bin || true  # optional on non-Debian
     fi
     
     log_success "All dependencies available"
