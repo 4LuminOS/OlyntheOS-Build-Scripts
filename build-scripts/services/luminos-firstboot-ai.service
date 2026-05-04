@@ -1,0 +1,17 @@
+[Unit]
+Description=LuminOS First-Boot AI Setup
+After=ollama.service network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/luminos-ai-installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/luminos-firstboot-ai.sh --gui
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=default.target

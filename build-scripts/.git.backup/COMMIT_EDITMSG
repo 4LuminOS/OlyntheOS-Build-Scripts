@@ -1,0 +1,1 @@
+fix: allow docker build to use proot when chroot is unavailable

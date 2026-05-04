@@ -1,0 +1,9 @@
+0000000000000000000000000000000000000000 71eeafb19085d389e42b3c88c687abb693e3229d kyzen-dev7 <pandasom32@gmail.com> 1777302915 +0530	clone: from https://github.com/KyzenDev7/build-scripts.git
+71eeafb19085d389e42b3c88c687abb693e3229d e48f686df03084bc1382d8042e994d017abd72ed kyzen-dev7 <pandasom32@gmail.com> 1777305223 +0530	commit: refactor: reorganize build system into modular directory structure
+e48f686df03084bc1382d8042e994d017abd72ed 412a072ca981369edc44e4fb5b7b5e72630d7b8d kyzen-dev7 <pandasom32@gmail.com> 1777435262 +0530	pull origin main: Fast-forward
+412a072ca981369edc44e4fb5b7b5e72630d7b8d c9de99195558733059acd65fb1bacb520b88a1c6 kyzen-dev7 <pandasom32@gmail.com> 1777445822 +0530	pull origin main: Fast-forward
+c9de99195558733059acd65fb1bacb520b88a1c6 2a7805a5489f5dd00c1f6222fe46d56cf978061c kyzen-dev7 <pandasom32@gmail.com> 1777810588 +0530	commit: docker: avoid installing grub packages on non-Debian hosts (skip grub-pc-bin/grub-efi)
+2a7805a5489f5dd00c1f6222fe46d56cf978061c 2e30a68a361d9e60d888ceeaefc8b5c880e51db0 kyzen-dev7 <pandasom32@gmail.com> 1777810607 +0530	pull --rebase origin main (finish): refs/heads/main onto b7ac5782010f91e9905953313f4625aa2681378e
+2e30a68a361d9e60d888ceeaefc8b5c880e51db0 7a06b3b9540002f0cccb4cf4eb24195a8651af11 kyzen-dev7 <pandasom32@gmail.com> 1777827793 +0530	commit: fix: make grub packages optional with || true — prevents crash on non-Debian distros
+7a06b3b9540002f0cccb4cf4eb24195a8651af11 3dad12d766ac1663038455eea1ac7c513be3d00d kyzen-dev7 <pandasom32@gmail.com> 1777908992 +0530	commit: builder(tui): wire RunStageCmd and add TUI package; set program handle
+3dad12d766ac1663038455eea1ac7c513be3d00d 8a22617b37dbc16ebbb6ea1a6e6251b39f08962a kyzen-dev7 <pandasom32@gmail.com> 1777917739 +0530	commit: fix: allow docker build to use proot when chroot is unavailable

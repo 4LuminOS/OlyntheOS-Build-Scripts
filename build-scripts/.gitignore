@@ -1,0 +1,17 @@
+# Editor local configuration files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Temporary build files or logs
+*.log
+build/
+chroot/
+iso/
+scripts/
+*.iso
+LuminOS-build/
+/builder/luminBuilder
