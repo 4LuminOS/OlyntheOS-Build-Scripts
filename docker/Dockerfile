@@ -15,12 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xorriso \
     isolinux \
     syslinux-common \
-    grub-pc-bin \
-    grub-efi-amd64-bin \
     mtools \
     dosfstools \
     rsync \
     sudo \
+    && apt-get install -y --no-install-recommends grub-pc-bin grub-efi-amd64-bin || true \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
