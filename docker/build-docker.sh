@@ -36,8 +36,13 @@ mkdir -p "${CHROOT_DIR}" "${ISO_DIR}/live" "${ISO_DIR}/boot/grub" "${AI_BUILD_DI
 echo "--> Installing dependencies..."
 apt-get update
 apt-get install -y debootstrap squashfs-tools xorriso mtools curl rsync proot
-# Grub packages are optional (may not be available on all distros)
+# Grub packages may not be available on all distros, but ISO generation requires grub-mkrescue.
 apt-get install -y grub-pc-bin grub-efi-amd64-bin || true
+ if ! command -v grub-mkrescue >/dev/null 2>&1; then
+     echo "ERROR: grub-mkrescue is required to generate the ISO, but it is not available."
+     echo "ERROR: Install GRUB tooling (for example grub-pc-bin and grub-efi-amd64-bin) or use a base image/distro that provides it."
+     exit 1
+ fi
 
 if chroot / /bin/true >/dev/null 2>&1; then
     TARGET_RUNTIME="chroot"
@@ -119,7 +124,7 @@ done
 echo "--> Bootstrapping Debian..."
 if [ "$TARGET_RUNTIME" = "proot" ]; then
     debootstrap --foreign --arch=amd64 --components=main,contrib,non-free-firmware --include=linux-image-amd64,live-boot,systemd-sysv trixie "${CHROOT_DIR}" http://ftp.debian.org/debian/
-    proot -0 -R "${CHROOT_DIR}" /debootstrap/debootstrap --second-stage
+    run_in_target /debootstrap/debootstrap --second-stage
 else
     debootstrap --arch=amd64 --components=main,contrib,non-free-firmware --include=linux-image-amd64,live-boot,systemd-sysv trixie "${CHROOT_DIR}" http://ftp.debian.org/debian/
 fi
