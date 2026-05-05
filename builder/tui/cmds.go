@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,9 +55,9 @@ func runChecksCmd(checks []Check) tea.Cmd {
 // This is what you actually use — returns a batch of Cmds.
 func RunChecksStream() tea.Cmd {
 	cmds := []tea.Cmd{
-		runSingleCheck("Root permissions",              checkRootSync),
-		runSingleCheck("Network connectivity",          checkNetworkSync),
-		runSingleCheck("Storage space (>20 GB free)",  checkStorageSync),
+		runSingleCheck("Root permissions", checkRootSync),
+		runSingleCheck("Network connectivity", checkNetworkSync),
+		runSingleCheck("Storage space (>20 GB free)", checkStorageSync),
 		runSingleCheck("OS compatibility (Debian/Ubuntu)", checkOSSync),
 		runSingleCheck("Required tools (debootstrap, squashfs)", checkToolsSync),
 	}
@@ -126,19 +128,24 @@ func checkToolsSync() (bool, string) {
 
 // Placeholder goroutine versions (used by runChecksCmd above)
 func checkRoot(ch chan<- CheckResultMsg) {
-	p, d := checkRootSync(); ch <- CheckResultMsg{Name: "Root permissions", Passed: p, Detail: d}
+	p, d := checkRootSync()
+	ch <- CheckResultMsg{Name: "Root permissions", Passed: p, Detail: d}
 }
 func checkNetwork(ch chan<- CheckResultMsg) {
-	p, d := checkNetworkSync(); ch <- CheckResultMsg{Name: "Network connectivity", Passed: p, Detail: d}
+	p, d := checkNetworkSync()
+	ch <- CheckResultMsg{Name: "Network connectivity", Passed: p, Detail: d}
 }
 func checkStorage(ch chan<- CheckResultMsg) {
-	p, d := checkStorageSync(); ch <- CheckResultMsg{Name: "Storage space (>20 GB free)", Passed: p, Detail: d}
+	p, d := checkStorageSync()
+	ch <- CheckResultMsg{Name: "Storage space (>20 GB free)", Passed: p, Detail: d}
 }
 func checkOS(ch chan<- CheckResultMsg) {
-	p, d := checkOSSync(); ch <- CheckResultMsg{Name: "OS compatibility (Debian/Ubuntu)", Passed: p, Detail: d}
+	p, d := checkOSSync()
+	ch <- CheckResultMsg{Name: "OS compatibility (Debian/Ubuntu)", Passed: p, Detail: d}
 }
 func checkTools(ch chan<- CheckResultMsg) {
-	p, d := checkToolsSync(); ch <- CheckResultMsg{Name: "Required tools (debootstrap, squashfs)", Passed: p, Detail: d}
+	p, d := checkToolsSync()
+	ch <- CheckResultMsg{Name: "Required tools (debootstrap, squashfs)", Passed: p, Detail: d}
 }
 
 // ── Build pipeline ────────────────────────────────────────────────────────────
@@ -181,8 +188,31 @@ func RunStageCmd(index int, stages []Stage, cfg BuildConfig, prog *tea.Program) 
 			return StageStartMsg{Index: index + 1, Name: stages[index+1].Name}
 		}
 
-		// Run the phase script
-		cmd := exec.Command("bash", stage.Script)
+		// Resolve script path (try executable-relative fallback) and run the phase script
+		scriptPath := stage.Script
+		if !filepath.IsAbs(scriptPath) {
+			if exe, err := os.Executable(); err == nil {
+				candidate := filepath.Join(filepath.Dir(exe), "..", scriptPath)
+				if _, err := os.Stat(candidate); err == nil {
+					scriptPath = candidate
+				}
+			}
+		}
+
+		cmd := exec.Command("bash", scriptPath)
+
+		// Set a reasonable working directory so scripts that use relative paths
+		// (repo-root relative) will still work when the binary is executed from
+		// a different CWD. If script lives in `phases/`, set workdir to repo root.
+		var workdir string
+		if strings.Contains(scriptPath, string(filepath.Separator)+"phases"+string(filepath.Separator)) || filepath.Base(filepath.Dir(scriptPath)) == "phases" {
+			workdir = filepath.Dir(filepath.Dir(scriptPath))
+		} else {
+			workdir = filepath.Dir(scriptPath)
+		}
+		if workdir != "" {
+			cmd.Dir = workdir
+		}
 
 		// Pass build config as env vars to the scripts
 		cmd.Env = append(os.Environ(),
@@ -197,7 +227,10 @@ func RunStageCmd(index int, stages []Stage, cfg BuildConfig, prog *tea.Program) 
 		if err != nil {
 			return StageFailMsg{Index: index, Err: err}
 		}
-		stderr, _ := cmd.StderrPipe()
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return StageFailMsg{Index: index, Err: err}
+		}
 
 		if err := cmd.Start(); err != nil {
 			return StageFailMsg{Index: index, Err: err}
@@ -245,14 +278,18 @@ func RunStageCmd(index int, stages []Stage, cfg BuildConfig, prog *tea.Program) 
 
 func getISOSize(path string) int64 {
 	info, err := os.Stat(path)
-	if err != nil { return 0 }
+	if err != nil {
+		return 0
+	}
 	return info.Size()
 }
 
 func computeSHA256(path string) string {
 	cmd := exec.Command("sha256sum", path)
 	out, err := cmd.Output()
-	if err != nil { return "error computing hash" }
+	if err != nil {
+		return "error computing hash"
+	}
 	// sha256sum output: "hash  filename"
 	if len(out) >= 64 {
 		return string(out[:64])
@@ -263,7 +300,9 @@ func computeSHA256(path string) string {
 func joinStrings(ss []string) string {
 	result := ""
 	for i, s := range ss {
-		if i > 0 { result += ", " }
+		if i > 0 {
+			result += ", "
+		}
 		result += s
 	}
 	return result

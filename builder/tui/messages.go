@@ -60,8 +60,8 @@ type AllChecksPassedMsg struct{}
 
 // ModelProgressMsg streams download progress from builder/model/download.go
 type ModelProgressMsg struct {
-	BytesDownloaded int64
-	TotalBytes      int64
+	BytesDownloaded  int64
+	TotalBytes       int64
 	SpeedBytesPerSec int64
 }
 

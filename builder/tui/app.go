@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -17,11 +17,11 @@ import (
 type Screen int
 
 const (
-	ScreenConfig  Screen = iota // user picks build options before starting
-	ScreenChecks                // pre-flight checks running
-	ScreenBuild                 // main build progress view
-	ScreenDone                  // success
-	ScreenError                 // fatal error
+	ScreenConfig Screen = iota // user picks build options before starting
+	ScreenChecks               // pre-flight checks running
+	ScreenBuild                // main build progress view
+	ScreenDone                 // success
+	ScreenError                // fatal error
 )
 
 // ── Stage definition ──────────────────────────────────────────────────────────
@@ -36,9 +36,9 @@ const (
 )
 
 type Stage struct {
-	Name   string      // "Install KDE Plasma"
-	Script string      // "phases/03-install-desktop.sh"
-	Detail string      // "287 packages"  (filled in during run)
+	Name   string // "Install KDE Plasma"
+	Script string // "phases/03-install-desktop.sh"
+	Detail string // "287 packages"  (filled in during run)
 	Status StageStatus
 	Start  time.Time
 	End    time.Time
@@ -85,8 +85,8 @@ type AppModel struct {
 	elapsed time.Duration
 
 	// Error state
-	buildErr   error
-	failStage  string
+	buildErr  error
+	failStage string
 
 	// Log toggle
 	showLog bool
@@ -138,14 +138,14 @@ func New() AppModel {
 
 		// These map directly to your phases/ scripts
 		stages: []Stage{
-			{Name: "Filesystem setup",      Script: "phases/02-configure-system.sh"},
-			{Name: "Install KDE Plasma",    Script: "phases/03-install-desktop.sh"},
-			{Name: "Customise desktop",     Script: "phases/04-customize-desktop.sh"},
-			{Name: "Install AI engine",     Script: "phases/05-install-ai.sh"},
-			{Name: "Install software",      Script: "phases/08-install-software.sh"},
-			{Name: "Plymouth theme",        Script: "phases/07-install-plymouth-theme.sh"},
-			{Name: "Final cleanup",         Script: "phases/06-final-cleanup.sh"},
-			{Name: "Package ISO",           Script: ""},  // handled by Go, not a script
+			{Name: "Filesystem setup", Script: "phases/02-configure-system.sh"},
+			{Name: "Install KDE Plasma", Script: "phases/03-install-desktop.sh"},
+			{Name: "Customise desktop", Script: "phases/04-customize-desktop.sh"},
+			{Name: "Install AI engine", Script: "phases/05-install-ai.sh"},
+			{Name: "Install software", Script: "phases/08-install-software.sh"},
+			{Name: "Plymouth theme", Script: "phases/07-install-plymouth-theme.sh"},
+			{Name: "Final cleanup", Script: "phases/06-final-cleanup.sh"},
+			{Name: "Package ISO", Script: ""}, // handled by Go, not a script
 		},
 	}
 }
@@ -171,7 +171,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		logH := m.height - 22
-		if logH < 4 { logH = 4 }
+		if logH < 4 {
+			logH = 4
+		}
 		m.logView = viewport.New(m.width-6, logH)
 		m.bar = progress.New(
 			progress.WithDefaultGradient(),
