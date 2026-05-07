@@ -4,24 +4,13 @@ FROM debian:13
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install common ISO/build tooling (adjust if build.sh needs extra deps)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    coreutils \
-    curl \
-    git \
-    jq \
-    make \
-    xorriso \
-    isolinux \
-    syslinux-common \
-    grub-pc-bin \
-    grub-efi-amd64-bin \
-    mtools \
-    dosfstools \
-    rsync \
-    sudo \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    set -eux; \
+    base_pkgs="bash ca-certificates coreutils curl git jq make xorriso isolinux syslinux-common mtools dosfstools rsync sudo"; \
+    for p in grub-pc-bin grub-efi-amd64-bin; do \
+        if apt-cache show "$p" >/dev/null 2>&1; then base_pkgs="$base_pkgs $p"; fi; \
+    done; \
+    apt-get install -y --no-install-recommends $base_pkgs && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 

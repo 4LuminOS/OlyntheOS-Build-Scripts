@@ -26,7 +26,12 @@ mkdir -p "${CHROOT_DIR}" "${ISO_DIR}/live" "${ISO_DIR}/boot/grub" "${AI_BUILD_DI
 # --- 2. Install Dependencies ---
 echo "--> Installing dependencies..."
 apt-get update
-apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools curl rsync
+set -eux
+PKGS="debootstrap squashfs-tools xorriso mtools curl rsync"
+for p in grub-pc-bin grub-efi-amd64-bin; do
+    if apt-cache show "$p" >/dev/null 2>&1; then PKGS="$PKGS $p"; fi
+done
+apt-get install -y $PKGS
 
     # --- 3. PREPARE AI ---
     echo "--> Preparing AI..."

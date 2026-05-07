@@ -17,8 +17,11 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        # Added squashfs-tools, xorriso, and grub components
-        sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools curl rsync
+        PKGS="debootstrap squashfs-tools xorriso mtools curl rsync"
+        for p in grub-pc-bin grub-efi-amd64-bin; do
+          if apt-cache show $p >/dev/null 2>&1; then PKGS="$PKGS $p"; fi
+        done
+        sudo apt-get install -y $PKGS
 
     - name: Run the Master Build Script
       run: |
